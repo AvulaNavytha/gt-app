@@ -1,0 +1,37 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ],
+  "hosting": {
+    "public": "gmapp/dist",
+    "rewrites": [
+      {
+        "source": "/.well-known/acme-challenge/**",
+        "destination": "/.well-known/acme-challenge/index.html"
+      },
+      {
+        "source": "/api/**",
+        "function": "api"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/test/**",
+        "function": "testRoute"
+      }
+    ],
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+  }
+}
