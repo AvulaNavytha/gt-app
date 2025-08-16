@@ -9,16 +9,13 @@
         "firebase-debug.log",
         "firebase-debug.*.log",
         "*.local"
-      ]
+      ],
+      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run lint"]
     }
   ],
   "hosting": {
     "public": "gmapp/dist",
     "rewrites": [
-      {
-        "source": "/.well-known/acme-challenge/**",
-        "destination": "/.well-known/acme-challenge/index.html"
-      },
       {
         "source": "/api/**",
         "function": "api"
@@ -33,5 +30,9 @@
       }
     ],
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   }
 }

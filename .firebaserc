@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "geetha-multiplex"
-  }
+    "default": "t1234-5baa6",
+    "staging": "t1234-5baa6"
+  },
+  "targets": {},
+  "etags": {}
 }
