@@ -1,18 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useStore } from '../store/useStore';
-import { useMenuStore } from '../store/menuStore';
-import { Plus, Minus } from 'lucide-react';
-import toast from 'react-hot-toast';
-import LoadingSpinner from '../components/LoadingSpinner';
-import Navbar from '../components/Navbar';
-import CategoryBar from '../components/CategoryBar';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useStore } from "../store/useStore";
+import { useMenuStore } from "../store/menuStore";
+import { Plus, Minus } from "lucide-react";
+import toast from "react-hot-toast";
+import LoadingSpinner from "../components/LoadingSpinner";
+import Navbar from "../components/Navbar";
+import CategoryBar from "../components/CategoryBar";
 
 function Menu() {
   const navigate = useNavigate();
   const { items, loading, error, startRealTimeUpdates } = useMenuStore();
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedSubcategory, setSelectedSubcategory] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedSubcategory, setSelectedSubcategory] = useState("all");
   const { cart, addToCart, updateQuantity, removeFromCart } = useStore();
 
   useEffect(() => {
@@ -32,7 +32,7 @@ function Menu() {
     });
 
     return [
-      { main: 'all', subcategories: [] },
+      { main: "all", subcategories: [] },
       ...Array.from(categoryMap.entries()).map(([main, subs]) => ({
         main,
         subcategories: Array.from(subs),
@@ -42,9 +42,9 @@ function Menu() {
 
   const filteredAndSortedItems = React.useMemo(() => {
     const filtered = items.filter((item) => {
-      if (selectedCategory === 'all') return true;
+      if (selectedCategory === "all") return true;
       if (item.category !== selectedCategory) return false;
-      if (selectedSubcategory === 'all') return true;
+      if (selectedSubcategory === "all") return true;
       return item.subcategory === selectedSubcategory;
     });
 
@@ -112,20 +112,21 @@ function Menu() {
   return (
     <div className="min-h-screen bg-gray-100">
       <Navbar />
-      
-      <br /><br />
+
+      <br />
+      <br />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 auto-rows-fr">
           {filteredAndSortedItems.map((item) => (
             <div
               key={item.id}
-              className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 flex flex-col h-[calc(60vh-4rem)] md:h-[calc(40vh- (-3)rem)] lg:h-[calc(50vh-(-4) rem)]"
+              className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 flex flex-col"
             >
-              <div className="relative flex-shrink-0 lg:h-[55%] md:h-[50%] h-[50%]">
+              <div className="relative flex-shrink-0 h-40 md:h-48 lg:h-56">
                 <img
                   src={item.image}
                   alt={item.name}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
                 />
                 {!item.enabled && (
                   <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
