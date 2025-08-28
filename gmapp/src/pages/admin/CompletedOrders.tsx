@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Auth } from 'firebase/auth';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { auth, db } from '../../lib/firebase';
-import { Printer, Download, Calendar } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { exportOrders } from '../../utils/exportOrders';
-import { format } from 'date-fns';
-import { calculateTaxes } from '../../utils/calculateTaxes';
+import React, { useState, useEffect } from "react";
+import { Auth } from "firebase/auth";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { auth, db } from "../../lib/firebase";
+import { Printer, Download, Calendar } from "lucide-react";
+import toast from "react-hot-toast";
+import { exportOrders } from "../../utils/exportOrders";
+import { format } from "date-fns";
+import { calculateTaxes } from "../../utils/calculateTaxes";
+import { deleteDoc, doc } from "firebase/firestore";
 
 interface Order {
   id: string;
@@ -20,18 +21,19 @@ interface Order {
   customerPhone: string;
   seatNumber: string;
   screen: string;
-  orderId:number;
+  orderId: number;
   status: string;
   createdAt: string;
   completedAt: string;
-  adding:string,
-  completionStatus: 'success' | 'failed';
+  adding: string;
+  completionStatus: "success" | "failed";
 }
 
 function CompletedOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
+  const [deleteDate, setDeleteDate] = useState<Date | null>(null);
   const [totalCollected, setTotalCollected] = useState(0);
 
   useEffect(() => {
@@ -47,10 +49,10 @@ function CompletedOrders() {
       endOfRange.setHours(23, 59, 59, 999);
 
       const q = query(
-        collection(db, 'orders'),
-        where('status', 'in', ['completed', 'not_done']),
-        where('createdAt', '>=', startOfRange.toISOString()),
-        where('createdAt', '<=', endOfRange.toISOString())
+        collection(db, "orders"),
+        where("status", "in", ["completed", "not_done"]),
+        where("createdAt", ">=", startOfRange.toISOString()),
+        where("createdAt", "<=", endOfRange.toISOString())
       );
 
       const querySnapshot = await getDocs(q);
@@ -60,7 +62,8 @@ function CompletedOrders() {
       });
 
       const sortedOrders = fetchedOrders.sort(
-        (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+        (a, b) =>
+          new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
       );
 
       setOrders(sortedOrders);
@@ -69,13 +72,16 @@ function CompletedOrders() {
       const total = sortedOrders.reduce((sum, order) => sum + order.total, 0);
       setTotalCollected(total);
     } catch (error) {
-      toast.error('Failed to fetch completed orders');
+      toast.error("Failed to fetch completed orders");
       console.error(error);
     }
   };
 
   const handlePrint = (order: Order) => {
-    const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const subtotal = order.items.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
     const { sgst, cgst, handlingCharges } = calculateTaxes(subtotal);
 
     const printContent = `
@@ -96,7 +102,11 @@ function CompletedOrders() {
       ---------------------------------
       Items:
       ---------------------------------
-      ${String(`Item Name`).padEnd(15) + String(`Qty`).padEnd(5) + String(`Price`)}
+      ${
+        String(`Item Name`).padEnd(15) +
+        String(`Qty`).padEnd(5) +
+        String(`Price`)
+      }
 ${order.items
   .map(
     (item) =>
@@ -104,7 +114,7 @@ ${order.items
         item.price * item.quantity
       ).toFixed(2)}`
   )
-  .join('\n')}
+  .join("\n")}
 
       ---------------------------------
       Sub Total            :₹ ${subtotal.toFixed(2)}
@@ -116,7 +126,7 @@ ${order.items
       Thank You for Choosing Geetha Multiplex!
 `;
 
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open("", "_blank");
     if (printWindow) {
       printWindow.document.write(`<pre>${printContent}</pre>`);
       printWindow.document.close();
@@ -126,14 +136,58 @@ ${order.items
 
   const handleExport = () => {
     if (orders.length === 0) {
-      toast.error('No orders to export');
+      toast.error("No orders to export");
       return;
     }
     try {
       exportOrders(orders, startDate, endDate);
-      toast.success('Orders exported successfully');
+      toast.success("Orders exported successfully");
     } catch (error) {
-      toast.error('Failed to export orders');
+      toast.error("Failed to export orders");
+    }
+  };
+
+  const handleDeleteData = async () => {
+    try {
+      if (!deleteDate) {
+        toast.error("No date selected");
+        return;
+      }
+      const cutoffDate = new Date(deleteDate);
+      cutoffDate.setHours(0, 0, 0, 0);
+
+      // Show confirmation dialog
+      const confirmed = window.confirm(
+        `Are you sure you want to delete all orders before ${cutoffDate.toDateString()}? This action cannot be undone.`
+      );
+
+      if (!confirmed) return;
+
+      // Query all orders older than selected date
+      const q = query(
+        collection(db, "orders"),
+        where("createdAt", "<", cutoffDate.toISOString())
+      );
+
+      const querySnapshot = await getDocs(q);
+      console.log(querySnapshot);
+
+      if (querySnapshot.empty) {
+        toast.error("No orders found before this date.");
+        return;
+      }
+
+      // Delete each order
+      const deletePromises = querySnapshot.docs.map((d) =>
+        deleteDoc(doc(db, "orders", d.id))
+      );
+      await Promise.all(deletePromises);
+
+      toast.success("Orders deleted successfully.");
+      fetchCompletedOrders(); // refresh UI
+    } catch (error) {
+      console.error("Error deleting orders:", error);
+      toast.error("Failed to delete orders.");
     }
   };
 
@@ -148,84 +202,127 @@ ${order.items
             <Calendar className="w-5 h-5 text-gray-500 hidden lg:block md:block" />
             <input
               type="date"
-              value={format(startDate, 'yyyy-MM-dd')}
+              value={format(startDate, "yyyy-MM-dd")}
               onChange={(e) => setStartDate(new Date(e.target.value))}
               className="border border-gray-300 rounded-md px-1 py-1 md:px-3 md:py-2 lg:px-3 lg:py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
             <span>-</span>
             <input
               type="date"
-              value={format(endDate, 'yyyy-MM-dd')}
+              value={format(endDate, "yyyy-MM-dd")}
               onChange={(e) => setEndDate(new Date(e.target.value))}
               className="border border-gray-300 rounded-md px-1 py-1 md:px-3 md:py-2 lg:px-3 lg:py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
-          {auth.currentUser?.email == 'holytavvala@gmail.com' && (
-          <button
-            onClick={handleExport}
-            className=" items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 hidden lg:inline-flex md:inline-flex"
-          >
-            <Download className="w-4 h-4 lg:mr-2 md:mr-2" />
-            <span className='block'>Export</span>
-          </button>)}
+          {auth.currentUser?.email == "holytavvala@gmail.com" && (
+            <div className="flex flex-col space-y-2">
+              {/* Export button */}
+              <button
+                onClick={handleExport}
+                className="items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 hidden lg:inline-flex md:inline-flex"
+              >
+                <Download className="w-4 h-4 lg:mr-2 md:mr-2" />
+                <span className="block">Export</span>
+              </button>
+
+              {/* Delete Data with calendar input */}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="date"
+                  value={deleteDate ? format(deleteDate, "yyyy-MM-dd") : ""}
+                  onChange={(e) =>
+                    setDeleteDate(
+                      e.target.value ? new Date(e.target.value) : null
+                    )
+                  }
+                  className="border border-gray-300 rounded-md px-2 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+                <button
+                  onClick={handleDeleteData}
+                  className="items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+                >
+                  Delete Data
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="bg-gray-100 p-4 rounded-md shadow-sm float-right">
-      {auth.currentUser?.email == 'holytavvala@gmail.com' && (
-      <button
+        {auth.currentUser?.email == "holytavvala@gmail.com" && (
+          <button
             onClick={handleExport}
             className="block lg:hidden md:hidden inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700"
           >
             <Download className="w-4 h-4 lg:mr-2 md:mr-2" />
-          </button>)}
-</div>
+          </button>
+        )}
+      </div>
       <div className="bg-gray-100 p-4 rounded-md shadow-sm flex justify-between">
         <p className="text-sm font-medium text-gray-700">
-          Number of Orders: <span className="font-semibold">{orders.length}</span>
+          Number of Orders:{" "}
+          <span className="font-semibold">{orders.length}</span>
         </p>
         <p className="text-sm font-medium text-gray-700">
-          Total Collected: <span className="font-semibold">₹{totalCollected.toFixed(2)}</span>
+          Total Collected:{" "}
+          <span className="font-semibold">₹{totalCollected.toFixed(2)}</span>
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {orders.map((order) => {
-          const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+          const subtotal = order.items.reduce(
+            (sum, item) => sum + item.price * item.quantity,
+            0
+          );
           const { sgst, cgst, handlingCharges } = calculateTaxes(subtotal);
 
           return (
             <div key={order.id} className="bg-white rounded-lg shadow-md p-6">
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{order.customerName}</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {order.customerName}
+                  </h3>
                   <p className="text-sm text-gray-500">
-                        order No:<span className="text-red-500 text-lg font-bold">{order.orderId}</span>
-                      </p>
-                  <p className="text-sm text-gray-500">Seat: {order.seatNumber}</p>
-                  <p className="text-sm text-gray-500">Screen: {order.screen}</p>
+                    order No:
+                    <span className="text-red-500 text-lg font-bold">
+                      {order.orderId}
+                    </span>
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Seat: {order.seatNumber}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Screen: {order.screen}
+                  </p>
                   <p className="text-sm text-gray-500">
                     Completed: {new Date(order.completedAt).toLocaleString()}
                   </p>
                 </div>
                 <span
                   className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    order.completionStatus === 'success'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-purple-100 text-purple-800'
+                    order.completionStatus === "success"
+                      ? "bg-green-100 text-green-800"
+                      : "bg-purple-100 text-purple-800"
                   }`}
                 >
-                  {order.completionStatus === 'success' ? 'Completed' : 'Not Done'}
+                  {order.completionStatus === "success"
+                    ? "Completed"
+                    : "Not Done"}
                 </span>
-                {order.adding === 'manual' && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                      Manual
-                    </span>
-                  )}
+                {order.adding === "manual" && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                    Manual
+                  </span>
+                )}
               </div>
 
               <div className="border-t border-b py-4 my-4">
-                <h4 className="text-sm font-medium text-gray-900 mb-2">Order Items:</h4>
+                <h4 className="text-sm font-medium text-gray-900 mb-2">
+                  Order Items:
+                </h4>
                 <div className="space-y-2">
                   {order.items.map((item, index) => (
                     <div key={index} className="flex justify-between text-sm">
@@ -276,7 +373,9 @@ ${order.items
 
       {orders.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-gray-500">No orders found for the selected date range.</p>
+          <p className="text-gray-500">
+            No orders found for the selected date range.
+          </p>
         </div>
       )}
     </div>
