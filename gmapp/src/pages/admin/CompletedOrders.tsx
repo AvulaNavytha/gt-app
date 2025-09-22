@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { Auth } from "firebase/auth";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  deleteDoc,
+  doc,
+} from "firebase/firestore";
 import { auth, db } from "../../lib/firebase";
 import { Printer, Download, Calendar } from "lucide-react";
 import toast from "react-hot-toast";
 import { exportOrders } from "../../utils/exportOrders";
 import { format } from "date-fns";
 import { calculateTaxes } from "../../utils/calculateTaxes";
-import { deleteDoc, doc } from "firebase/firestore";
 
 interface Order {
   id: string;
@@ -68,7 +74,6 @@ function CompletedOrders() {
 
       setOrders(sortedOrders);
 
-      // Calculate total money collected
       const total = sortedOrders.reduce((sum, order) => sum + order.total, 0);
       setTotalCollected(total);
     } catch (error) {
@@ -156,35 +161,31 @@ ${order.items
       const cutoffDate = new Date(deleteDate);
       cutoffDate.setHours(0, 0, 0, 0);
 
-      // Show confirmation dialog
       const confirmed = window.confirm(
         `Are you sure you want to delete all orders before ${cutoffDate.toDateString()}? This action cannot be undone.`
       );
 
       if (!confirmed) return;
 
-      // Query all orders older than selected date
       const q = query(
         collection(db, "orders"),
         where("createdAt", "<", cutoffDate.toISOString())
       );
 
       const querySnapshot = await getDocs(q);
-      console.log(querySnapshot);
 
       if (querySnapshot.empty) {
         toast.error("No orders found before this date.");
         return;
       }
 
-      // Delete each order
       const deletePromises = querySnapshot.docs.map((d) =>
         deleteDoc(doc(db, "orders", d.id))
       );
       await Promise.all(deletePromises);
 
       toast.success("Orders deleted successfully.");
-      fetchCompletedOrders(); // refresh UI
+      fetchCompletedOrders();
     } catch (error) {
       console.error("Error deleting orders:", error);
       toast.error("Failed to delete orders.");
@@ -193,11 +194,12 @@ ${order.items
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-around items-center mx-auto">
+      <div className="flex justify-between items-center mx-auto">
         <h2 className="lg:text-2xl md:text-2xl font-bold text-gray-900 hidden lg:block md:block">
           Completed Orders
         </h2>
-        <div className="flex items-center space-x-2 md:space-x-4 lg:space-x-4">
+        <div className="flex items-center gap-3">
+          {/* Date Range Picker */}
           <div className="flex items-center space-x-1 md:space-x-2 lg:space-x-2">
             <Calendar className="w-5 h-5 text-gray-500 hidden lg:block md:block" />
             <input
@@ -214,51 +216,41 @@ ${order.items
               className="border border-gray-300 rounded-md px-1 py-1 md:px-3 md:py-2 lg:px-3 lg:py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
-          {auth.currentUser?.email == "holytavvala@gmail.com" && (
-            <div className="flex flex-col space-y-2">
-              {/* Export button */}
-              <button
-                onClick={handleExport}
-                className="items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 hidden lg:inline-flex md:inline-flex"
-              >
-                <Download className="w-4 h-4 lg:mr-2 md:mr-2" />
-                <span className="block">Export</span>
-              </button>
 
-              {/* Delete Data with calendar input */}
-              <div className="flex items-center space-x-2">
-                <input
-                  type="date"
-                  value={deleteDate ? format(deleteDate, "yyyy-MM-dd") : ""}
-                  onChange={(e) =>
-                    setDeleteDate(
-                      e.target.value ? new Date(e.target.value) : null
-                    )
-                  }
-                  className="border border-gray-300 rounded-md px-2 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
-                />
-                <button
-                  onClick={handleDeleteData}
-                  className="items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
-                >
-                  Delete Data
-                </button>
-              </div>
-            </div>
+          {auth.currentUser?.email == "holytavvala@gmail.com" && (
+            <button
+              onClick={handleExport}
+              className="items-center flex px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              <span className="hidden md:inline">Export</span>
+            </button>
           )}
         </div>
       </div>
 
-      <div className="bg-gray-100 p-4 rounded-md shadow-sm float-right">
+      <div>
+        {/* Delete Data Block */}
         {auth.currentUser?.email == "holytavvala@gmail.com" && (
-          <button
-            onClick={handleExport}
-            className="block lg:hidden md:hidden inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700"
-          >
-            <Download className="w-4 h-4 lg:mr-2 md:mr-2" />
-          </button>
+          <div className="flex items-center space-x-2 justify-end">
+            <input
+              type="date"
+              value={deleteDate ? format(deleteDate, "yyyy-MM-dd") : ""}
+              onChange={(e) =>
+                setDeleteDate(e.target.value ? new Date(e.target.value) : null)
+              }
+              className="border border-gray-300 rounded-md px-2 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+            <button
+              onClick={handleDeleteData}
+              className="items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+            >
+              Delete Data
+            </button>
+          </div>
         )}
       </div>
+
       <div className="bg-gray-100 p-4 rounded-md shadow-sm flex justify-between">
         <p className="text-sm font-medium text-gray-700">
           Number of Orders:{" "}
@@ -270,13 +262,14 @@ ${order.items
         </p>
       </div>
 
+      {/* Orders Grid */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {orders.map((order) => {
           const subtotal = order.items.reduce(
             (sum, item) => sum + item.price * item.quantity,
             0
           );
-          const { sgst, cgst, handlingCharges } = calculateTaxes(subtotal);
+          const { handlingCharges } = calculateTaxes(subtotal);
 
           return (
             <div key={order.id} className="bg-white rounded-lg shadow-md p-6">
@@ -338,14 +331,6 @@ ${order.items
                     <span>Subtotal</span>
                     <span>₹{subtotal.toFixed(2)}</span>
                   </div>
-                  {/* <div className="flex justify-between text-sm">
-                    <span>SGST (2.5%)</span>
-                    <span>₹{sgst.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>CGST (2.5%)</span>
-                    <span>₹{cgst.toFixed(2)}</span>
-                  </div> */}
                   <div className="flex justify-between text-sm">
                     <span>Handling Charges</span>
                     <span>₹{handlingCharges.toFixed(2)}</span>

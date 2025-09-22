@@ -34,14 +34,23 @@ const OrderConfirmation = () => {
       }
 
       try {
-        const res = await fetch(
-          `https://api-an5tzlhtka-uc.a.run.app/check-status?merchantOrderId=${merchantOrderId}`
-        );
-        const data = await res.json();
-        console.log("Payment status data:", data);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let data: any = null;
+        // 🔄 retry up to 5 times (every 3s)
+        for (let i = 0; i < 5; i++) {
+          const res = await fetch(
+            `https://api-an5tzlhtka-uc.a.run.app/check-status?merchantOrderId=${merchantOrderId}`
+          );
+          data = await res.json();
+          console.log(`Payment status attempt ${i + 1}:`, data);
 
-        if (data.status === "COMPLETED") {
-          // Update Firestore order payment status to "paid"
+          if (data.status === "COMPLETED") break;
+
+          await new Promise((r) => setTimeout(r, 3000)); // wait 3s
+        }
+
+        if (data?.status === "COMPLETED") {
+          // ✅ Update Firestore to "paid"
           const ordersRef = collection(db, "orders");
           const q = query(
             ordersRef,
@@ -55,7 +64,8 @@ const OrderConfirmation = () => {
           });
           console.log("Payment status success:");
           setStatus("success");
-        } else if (data.status !== "COMPLETED") {
+        } else {
+          // ❌ Final fallback if not completed
           const ordersRef = collection(db, "orders");
           const q = query(
             ordersRef,
@@ -65,14 +75,12 @@ const OrderConfirmation = () => {
 
           querySnapshot.forEach(async (orderDoc) => {
             const docRef = doc(db, "orders", orderDoc.id);
-            await updateDoc(docRef, { paymentStatus: data.status });
+            await updateDoc(docRef, {
+              paymentStatus: data?.status || "FAILED",
+            });
           });
-          console.log("Payment status failed:");
-          setStatus("error");
-          toast.error("Payment not completed.");
-          navigate("/");
-        } else {
-          console.log("Payment status failed:");
+
+          console.log("Payment status failed after retries:");
           setStatus("error");
           toast.error("Payment not completed.");
           navigate("/");

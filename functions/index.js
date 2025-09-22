@@ -9,6 +9,10 @@ const StandardCheckoutPayRequest =
 const Env = require("pg-sdk-node").Env;
 dotenv.config();
 
+const admin = require("firebase-admin");
+admin.initializeApp();
+const db = admin.firestore();
+
 // Initialize Express app
 const app = express();
 app.use(express.json());
@@ -86,6 +90,45 @@ app.get("/check-status", async (req, res) => {
   } catch (error) {
     console.error("Error getting status:", error);
     res.status(500).send("Error getting status");
+  }
+});
+
+// ✅ PhonePe Webhook Endpoint
+app.post("/webhook/phonepe", async (req, res) => {
+  try {
+    const event = req.body;
+
+    console.log("📩 PhonePe Webhook received:", event);
+
+    const eventType = event.event;
+    const state = event.payload && event.payload.state || "UNKNOWN";
+    const merchantOrderId = event.payload && event.payload.merchantOrderId;
+
+    if (
+      eventType === "pg.order.completed" ||
+      eventType === "checkout.order.completed" ||
+      state === "COMPLETED"
+    ) {
+      console.log(`🔔 Payment completed for Order ID: 
+        ${merchantOrderId}, Status: ${state}`);
+
+      if (merchantOrderId) {
+        const ordersRef = db.collection("orders");
+        const snapshot = await ordersRef.
+            where("merchantOrderId", "==", merchantOrderId).get();
+
+        snapshot.forEach(async (orderDoc) => {
+          await ordersRef.doc(orderDoc.id).update({paymentStatus: "paid"});
+        });
+
+        console.log(`✅ Order ${merchantOrderId} marked as paid via webhook`);
+      }
+    }
+
+    res.status(200).json({success: true});
+  } catch (err) {
+    console.error("❌ Webhook error:", err);
+    res.status(500).json({success: false});
   }
 });
 
